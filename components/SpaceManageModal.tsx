@@ -1,0 +1,368 @@
+// components/SpaceManageModal.tsx
+
+import React, { useState, useRef } from 'react';
+import { 
+  X, MapPin, Image as ImageIcon, Video, Check, Upload, Star, Trash2,
+  Wifi, Projector, Tv, Presentation, Mic, Speaker, Wind, Zap, Coffee, Cloud, Loader2
+} from 'lucide-react';
+import { LocationSpace, BranchId } from '../types';
+import { SPACE_AMENITIES } from '../constants';
+import { uploadToCloud } from '../services/uploadService';
+
+interface SpaceManageModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (item: LocationSpace) => void;
+  branchId: BranchId; // Current branch context
+}
+
+// Icon mapper for local rendering
+const iconMap: any = {
+  Wifi, Projector, Tv, Presentation, Mic, Speaker, Wind, Zap, Coffee
+};
+
+const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, onSave, branchId }) => {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [capacity, setCapacity] = useState('');
+  
+  // Media State
+  const [images, setImages] = useState<string[]>([]);
+  const [coverIndex, setCoverIndex] = useState<number>(0);
+  const [videoPreview, setVideoPreview] = useState<string>('');
+  
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Amenities State
+  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
+
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+
+  if (!isOpen) return null;
+
+  const handleFeatureToggle = (featureId: string) => {
+    setSelectedFeatures(prev => {
+      if (prev.includes(featureId)) {
+        return prev.filter(f => f !== featureId);
+      } else {
+        return [...prev, featureId];
+      }
+    });
+  };
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files) as File[];
+      const remainingSlots = 4 - images.length;
+      
+      if (files.length > remainingSlots) {
+        alert(`最多只能上傳 4 張照片。您目前還能上傳 ${remainingSlots} 張。`);
+        files.splice(remainingSlots);
+      }
+
+      if (files.length === 0) return;
+
+      setIsUploading(true);
+      
+      try {
+        // Upload all selected files concurrently
+        const uploadPromises = files.map(file => uploadToCloud(file));
+        const uploadedUrls = await Promise.all(uploadPromises);
+        
+        setImages(prev => [...prev, ...uploadedUrls]);
+      } catch (error) {
+        alert("部分圖片上傳失敗，請檢查網路。");
+      } finally {
+        setIsUploading(false);
+        if (imageInputRef.current) imageInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removeImage = (index: number) => {
+    const newImages = images.filter((_, i) => i !== index);
+    setImages(newImages);
+    
+    // Adjust cover index if needed
+    if (index === coverIndex) {
+      setCoverIndex(0); // Reset to first
+    } else if (index < coverIndex) {
+      setCoverIndex(coverIndex - 1);
+    }
+  };
+
+  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      // Note: Imgur handles images best. For videos, we might still resort to Blob for preview
+      // or warn user that large videos require YouTube links.
+      // For this "Network Mode" feature, let's keep video local/blob for now 
+      // OR try to upload if small. Imgur API does support video but logic is similar.
+      // Let's stick to Base64 for video (less critical) or Blob for now as video hosting is heavier.
+      // But user requested "All browsers". Let's try uploadToCloud for video too if small.
+      
+      if (file.size > 10 * 1024 * 1024) {
+         alert("影片檔案過大，建議使用 YouTube 連結。此處僅支援 10MB 以下預覽。");
+         return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if(ev.target?.result) setVideoPreview(ev.target.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (images.length === 0) {
+      alert("請至少上傳一張空間照片。");
+      return;
+    }
+
+    const newSpace: LocationSpace = {
+      id: Date.now().toString(),
+      branchId,
+      name,
+      description,
+      capacity,
+      imageUrl: images[coverIndex], // Set selected cover
+      images: images,
+      videoUrl: videoPreview,
+      features: selectedFeatures
+    };
+
+    onSave(newSpace);
+    
+    // Reset form
+    setName('');
+    setDescription('');
+    setCapacity('');
+    setImages([]);
+    setCoverIndex(0);
+    setVideoPreview('');
+    setSelectedFeatures([]);
+    onClose();
+  };
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90%]">
+        {/* Header */}
+        <div className="bg-brand-600 p-4 text-white flex justify-between items-center shrink-0">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <MapPin size={20} /> 新增空間 / 會議室
+          </h3>
+          <button onClick={onClose} className="hover:bg-brand-700 p-1 rounded-full">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
+          
+          {/* Name & Capacity */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">空間名稱 <span className="text-red-500">*</span></label>
+              <input 
+                type="text" 
+                required
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="例如：20A 會議室"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">容納人數</label>
+              <input 
+                type="text" 
+                value={capacity}
+                onChange={e => setCapacity(e.target.value)}
+                placeholder="10人"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">空間描述</label>
+            <textarea 
+              rows={3}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="描述設備、景觀或適合用途..."
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none resize-none"
+            />
+          </div>
+
+          <hr className="border-gray-100" />
+
+          {/* Amenities Selection */}
+          <div>
+             <label className="block text-sm font-medium text-gray-700 mb-2">空間設備 (可多選)</label>
+             <div className="grid grid-cols-3 gap-2">
+               {SPACE_AMENITIES.map(amenity => {
+                 const Icon = iconMap[amenity.iconName];
+                 const isSelected = selectedFeatures.includes(amenity.id);
+                 return (
+                   <button
+                    key={amenity.id}
+                    type="button"
+                    onClick={() => handleFeatureToggle(amenity.id)}
+                    className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-bold transition-all ${
+                      isSelected 
+                        ? 'bg-brand-50 border-brand-500 text-brand-600' 
+                        : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                    }`}
+                   >
+                     {Icon && <Icon size={16} />}
+                     {amenity.label}
+                   </button>
+                 );
+               })}
+             </div>
+          </div>
+
+          <hr className="border-gray-100" />
+
+          {/* Image Upload Section */}
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                <ImageIcon size={16} /> 空間照片 (最多4張) <span className="text-red-500">*</span>
+              </label>
+              {isUploading && <span className="text-xs text-brand-600 flex items-center gap-1 animate-pulse"><Cloud size={12}/> 上傳雲端中...</span>}
+            </div>
+            
+            {/* Grid for uploaded images */}
+            {images.length > 0 && (
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                {images.map((img, idx) => (
+                  <div 
+                    key={idx} 
+                    className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer group border-2 transition-all ${
+                      coverIndex === idx ? 'border-brand-500 ring-2 ring-brand-200' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setCoverIndex(idx)}
+                  >
+                    <img src={img} alt={`Upload ${idx}`} className="w-full h-full object-cover" />
+                    
+                    {/* Cover Indicator */}
+                    {coverIndex === idx && (
+                      <div className="absolute top-1 left-1 bg-brand-500 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm font-bold flex items-center gap-0.5">
+                        <Star size={8} fill="currentColor" /> 封面
+                      </div>
+                    )}
+
+                    {/* Delete Button */}
+                    <button 
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
+                      className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+                
+                {/* Add Button Placeholder inside grid if < 4 */}
+                {images.length < 4 && (
+                   <button 
+                     type="button"
+                     disabled={isUploading}
+                     onClick={() => imageInputRef.current?.click()}
+                     className="aspect-square rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-50 hover:border-brand-400 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-wait"
+                   >
+                      {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Upload size={20} />}
+                      <span className="text-xs mt-1">新增</span>
+                   </button>
+                )}
+              </div>
+            )}
+
+            {/* Initial Big Upload Box if Empty */}
+            {images.length === 0 && (
+              <div 
+                onClick={() => !isUploading && imageInputRef.current?.click()}
+                className={`border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-50 cursor-pointer h-32 flex items-center justify-center flex-col text-gray-400 ${isUploading ? 'opacity-50 cursor-wait' : ''}`}
+              >
+                 {isUploading ? (
+                    <Loader2 size={32} className="animate-spin mb-2 text-brand-500" />
+                 ) : (
+                    <Cloud size={32} className="mb-2" />
+                 )}
+                 <span className="text-xs">{isUploading ? '正在上傳至雲端...' : '點擊上傳圖片 (自動轉為網路連結)'}</span>
+              </div>
+            )}
+
+            <input 
+              type="file" 
+              ref={imageInputRef} 
+              className="hidden" 
+              accept="image/*"
+              multiple
+              onChange={handleImageChange}
+              disabled={isUploading}
+            />
+          </div>
+
+          {/* Video Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <Video size={16} /> 導覽影片 (選填)
+            </label>
+            <div 
+              onClick={() => videoInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-50 cursor-pointer relative overflow-hidden h-24 flex items-center justify-center"
+            >
+              <input 
+                type="file" 
+                ref={videoInputRef} 
+                className="hidden" 
+                accept="video/*"
+                onChange={handleVideoChange}
+              />
+              {videoPreview ? (
+                 <div className="w-full h-full bg-black rounded-lg flex items-center justify-center text-white">
+                   <span className="text-xs">影片已選擇 (僅限本機預覽)</span>
+                 </div>
+              ) : (
+                <div className="text-gray-400 flex flex-col items-center">
+                  <Upload size={20} className="mb-1" />
+                  <span className="text-xs">點擊上傳影片 (建議使用外部連結)</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="pt-2 flex gap-3">
+             <button 
+              type="button"
+              onClick={onClose}
+              disabled={isUploading}
+              className="flex-1 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button 
+              type="submit"
+              disabled={isUploading}
+              className="flex-1 py-2 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-400"
+            >
+              <Check size={18} /> {isUploading ? '上傳中...' : '儲存空間'}
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default SpaceManageModal;
