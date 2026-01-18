@@ -13,7 +13,7 @@ import {
   LogOut, Lock, Settings, Shield, Upload, Check, Download, UploadCloud, FileJson,
   Ship, GraduationCap, Tent, Sparkles, Clock, History, CreditCard, Calendar
 } from 'lucide-react';
-import { BRANCHES, EQUIPMENTS, ANNOUNCEMENTS, INITIAL_SPACES, SPACE_AMENITIES, WIKI_CATEGORIES, BUSINESS_PARTNERS, BUSINESS_PARTNER_CATEGORIES, INITIAL_OFFICE_TYPES, INITIAL_MEMBERS } from './constants';
+import { BRANCHES, EQUIPMENTS, ANNOUNCEMENTS, INITIAL_SPACES, SPACE_AMENITIES, WIKI_CATEGORIES, BUSINESS_PARTNERS, BUSINESS_PARTNER_CATEGORIES, INITIAL_OFFICE_TYPES, INITIAL_MEMBERS, RULES } from './constants';
 import { BranchId, Equipment, Announcement, LocationSpace, WikiCategory, BusinessPartner, OfficeType, AppDataBackup, MemberProfile } from './types';
 import * as Types from './types';
 import ValueServices from './components/ValueServices';
@@ -26,7 +26,8 @@ import OfficeEditModal from './components/OfficeEditModal';
 import MemberManageModal from './components/MemberManageModal';
 import { subscribeToCollection, addItem, updateItem, deleteItem } from './lib/firebaseClient';
 import { seedFirestore } from './lib/seed';
-import { db } from './firebase';
+import { db, auth } from './firebase';
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
 // Icon mapper for detail view
 const iconMap: any = {
@@ -113,6 +114,41 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // -- Auth State Sync --
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        if (user.email === 'admin@daoteng.org') {
+          setIsAdmin(true);
+          setIsMemberLoggedIn(true);
+          setCurrentUser({
+            id: 'admin',
+            name: '系統管理員',
+            password: '',
+            pettyCashBalance: 0,
+            meetingPointsTotal: 0,
+            meetingPointsUsed: 0,
+            contractDate: '永久有效'
+          });
+        } else {
+          // If it's a member user (using their email as name matching)
+          const matchedMember = members.find(m => `${m.id}@daoteng.org` === user.email);
+          if (matchedMember) {
+            setIsMemberLoggedIn(true);
+            setCurrentUser(matchedMember);
+            setIsAdmin(false);
+          }
+        }
+      } else {
+        setIsMemberLoggedIn(false);
+        setIsAdmin(false);
+        setCurrentUser(null);
+      }
+    });
+
+    return () => unsub();
+  }, [members]);
+
   // Auto-seed if empty
   useEffect(() => {
     if (wikiItems.length === 0 && announcements.length === 0) {
@@ -122,30 +158,37 @@ const App: React.FC = () => {
 
   // -- Auth Actions --
 
-  const handleMemberLogin = (e: React.FormEvent) => {
+  const handleMemberLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const matchedMember = members.find(m => m.password === memberPasswordInput);
 
     if (matchedMember) {
-      setIsMemberLoggedIn(true);
-      setCurrentUser(matchedMember);
-      setMemberPasswordInput('');
-      setMemberAccountInput('');
+      try {
+        // Use a virtual email for members to satisfy Firebase Auth requirement
+        await signInWithEmailAndPassword(auth, `${matchedMember.id}@daoteng.org`, memberPasswordInput);
+        setMemberPasswordInput('');
+        setMemberAccountInput('');
+      } catch (error: any) {
+        if (error.code === 'auth/user-not-found') {
+          alert('該會員帳號尚未在驗證系統激活，請聯繫管理員。');
+        } else {
+          alert('登入失敗，請檢查密碼。');
+        }
+      }
     } else {
       alert('會員密碼錯誤，請重試。');
     }
   };
 
-  const handleLogout = () => {
-    setIsMemberLoggedIn(false);
-    setCurrentUser(null);
-    if (isAdmin) setIsAdmin(false);
+  const handleLogout = async () => {
+    await signOut(auth);
+    alert("已成功登出。");
   };
 
   const handleAdminToggle = () => {
     if (isAdmin) {
       if (window.confirm("確定要登出管理者模式嗎？")) {
-        setIsAdmin(false);
+        handleLogout();
       }
     } else {
       setShowAdminLogin(true);
@@ -153,27 +196,17 @@ const App: React.FC = () => {
     }
   };
 
-  const submitAdminLogin = (e: React.FormEvent) => {
+  const submitAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPasswordInput === 'app5286!@#') {
-      setIsAdmin(true);
-      if (!isMemberLoggedIn) {
-        setIsMemberLoggedIn(true);
-        setCurrentUser({
-          id: 'admin',
-          name: '系統管理員',
-          password: '',
-          pettyCashBalance: 0,
-          meetingPointsTotal: 0,
-          meetingPointsUsed: 0,
-          contractDate: '永久有效'
-        });
-      }
+    try {
+      // Use email-based login for admin
+      await signInWithEmailAndPassword(auth, 'admin@daoteng.org', adminPasswordInput);
       setShowAdminLogin(false);
       setAdminPasswordInput('');
       alert("管理者登入成功！已啟用編輯與管理權限。");
-    } else {
-      alert("管理者密碼錯誤");
+    } catch (error) {
+      console.error(error);
+      alert("管理者登入失敗，請檢查密碼。");
     }
   };
 

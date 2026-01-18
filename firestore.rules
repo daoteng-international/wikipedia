@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read access to everyone for the demo phase
+    match /{document=**} {
+      allow read: if true;
+    }
+    
+    // Only authenticated admins can write/delete
+    match /{document=**} {
+      allow write: if request.auth != null && request.auth.token.email == 'admin@daoteng.org';
+    }
+  }
+}
