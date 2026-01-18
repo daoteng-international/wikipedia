@@ -1,15 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
-import { EQUIPMENTS, BRANCHES, RULES } from '../constants';
 
-// Initialize with environment variable
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-// Construct the system context from our static data
-const getSystemInstruction = () => {
-  const equipmentText = EQUIPMENTS.map(e => `${e.title}: ${e.instructions.join(', ')}`).join('\n');
-  const branchText = BRANCHES.map(b => `${b.name} at ${b.address}`).join('\n');
-  const rulesText = RULES.join('\n');
+// Construct the system context from dynamic data
+const getSystemInstruction = (branches: any[], equipments: any[], rules: string[]) => {
+  const equipmentText = equipments.map(e => `${e.title}: ${e.instructions?.join(', ') || ''}`).join('\n');
+  const branchText = branches.map(b => `${b.name} at ${b.address}`).join('\n');
+  const rulesText = rules.join('\n');
 
   return `You are the AI Assistant for Daoteng Coworking Space (道騰國際共享空間). 
   Your goal is to help tenants solve problems instantly and guide potential customers.
@@ -33,19 +31,19 @@ const getSystemInstruction = () => {
   Respond in Traditional Chinese (繁體中文).`;
 };
 
-export const chatWithGemini = async (userMessage: string) => {
+export const chatWithGemini = async (userMessage: string, branches: any[], equipments: any[], rules: string[]) => {
   if (!apiKey) {
     return "API Key not configured. Please check environment variables.";
   }
 
   try {
     const model = 'gemini-3-flash-preview';
-    
+
     const response = await ai.models.generateContent({
       model: model,
       contents: userMessage,
       config: {
-        systemInstruction: getSystemInstruction(),
+        systemInstruction: getSystemInstruction(branches, equipments, rules),
       }
     });
 
