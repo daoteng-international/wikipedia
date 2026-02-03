@@ -1,4 +1,10 @@
 
+export enum UserRole {
+  ADMIN = 'Admin',
+  FINANCE = 'Finance',
+  OPERATIONS = 'Operations'
+}
+
 export type Tab = 'home' | 'locations' | 'wiki' | 'services' | 'business';
 
 export enum BranchId {

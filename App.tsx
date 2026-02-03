@@ -29,6 +29,10 @@ import { seedFirestore } from './lib/seed';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
+import LoginModal from './components/LoginModal';
+import { doc, getDoc } from 'firebase/firestore';
+import { UserRole } from './types';
+
 // Icon mapper for detail view
 const iconMap: any = {
   Wifi, Projector, Tv, Presentation, Mic, Speaker, Wind, Zap, Coffee,
@@ -45,20 +49,21 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
 
   // -- Auth State --
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isMemberManageModalOpen, setIsMemberManageModalOpen] = useState(false);
+
+  // -- Member Auth State (Restored) --
   const [isMemberLoggedIn, setIsMemberLoggedIn] = useState(false);
   const [memberAccountInput, setMemberAccountInput] = useState('');
   const [memberPasswordInput, setMemberPasswordInput] = useState('');
-
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [adminPasswordInput, setAdminPasswordInput] = useState('');
-  const [isMemberManageModalOpen, setIsMemberManageModalOpen] = useState(false);
 
   // -- Wiki State --
   const [wikiItems, setWikiItems] = useState<Equipment[]>(EQUIPMENTS);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeWikiCategory, setActiveWikiCategory] = useState<WikiCategory | 'all'>('all');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [editingWikiItem, setEditingWikiItem] = useState<Equipment | null>(null);
 
   // -- Announcement State --
   const [announcements, setAnnouncements] = useState<Announcement[]>(ANNOUNCEMENTS);
@@ -116,31 +121,47 @@ const App: React.FC = () => {
 
   // -- Auth State Sync --
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        if (user.email === 'admin@daoteng.org') {
-          setIsAdmin(true);
-          setIsMemberLoggedIn(true);
-          setCurrentUser({
-            id: 'admin',
-            name: '系統管理員',
-            password: '',
-            pettyCashBalance: 0,
-            meetingPointsTotal: 0,
-            meetingPointsUsed: 0,
-            contractDate: '永久有效'
-          });
-        } else {
-          // If it's a member user (using their email as name matching)
-          const matchedMember = members.find(m => `${m.id}@daoteng.org` === user.email);
-          if (matchedMember) {
-            setIsMemberLoggedIn(true);
-            setCurrentUser(matchedMember);
+        try {
+          // Fetch User Role from Firestore
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const role = userData.role;
+
+            // Check if role is authorized (Admin, Finance, or Operator)
+            // Note: In Meeting Room app, 'OPERATOR' maps to UserRole.OPERATIONS
+            if (role === 'ADMIN' || role === 'FINANCE' || role === 'OPERATOR') {
+              setIsAdmin(true);
+              setCurrentUser({
+                id: user.uid,
+                name: userData.displayName || user.email?.split('@')[0] || 'Admin',
+                password: '',
+                pettyCashBalance: 0,
+                meetingPointsTotal: 0,
+                meetingPointsUsed: 0,
+                contractDate: 'N/A'
+              });
+            } else {
+              // Not an admin role
+              setIsAdmin(false);
+              alert('您的帳號無權限存取此系統 (Access Denied)。');
+              await signOut(auth);
+            }
+          } else {
+            // User login valid but no profile in DB -> Deny
             setIsAdmin(false);
+            console.warn('User logged in but no Firestore profile found.');
+            alert('找不到使用者資料，請聯繫管理員。');
+            await signOut(auth);
           }
+        } catch (error) {
+          console.error('Error fetching user role:', error);
+          setIsAdmin(false);
         }
       } else {
-        setIsMemberLoggedIn(false);
         setIsAdmin(false);
         setCurrentUser(null);
       }
@@ -158,28 +179,6 @@ const App: React.FC = () => {
 
   // -- Auth Actions --
 
-  const handleMemberLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const matchedMember = members.find(m => m.password === memberPasswordInput);
-
-    if (matchedMember) {
-      try {
-        // Use a virtual email for members to satisfy Firebase Auth requirement
-        await signInWithEmailAndPassword(auth, `${matchedMember.id}@daoteng.org`, memberPasswordInput);
-        setMemberPasswordInput('');
-        setMemberAccountInput('');
-      } catch (error: any) {
-        if (error.code === 'auth/user-not-found') {
-          alert('該會員帳號尚未在驗證系統激活，請聯繫管理員。');
-        } else {
-          alert('登入失敗，請檢查密碼。');
-        }
-      }
-    } else {
-      alert('會員密碼錯誤，請重試。');
-    }
-  };
-
   const handleLogout = async () => {
     await signOut(auth);
     alert("已成功登出。");
@@ -191,22 +190,7 @@ const App: React.FC = () => {
         handleLogout();
       }
     } else {
-      setShowAdminLogin(true);
-      setAdminPasswordInput('');
-    }
-  };
-
-  const submitAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      // Use email-based login for admin
-      await signInWithEmailAndPassword(auth, 'admin@daoteng.org', adminPasswordInput);
-      setShowAdminLogin(false);
-      setAdminPasswordInput('');
-      alert("管理者登入成功！已啟用編輯與管理權限。");
-    } catch (error) {
-      console.error(error);
-      alert("管理者登入失敗，請檢查密碼。");
+      setIsLoginModalOpen(true);
     }
   };
 
@@ -218,6 +202,25 @@ const App: React.FC = () => {
   };
 
   // -- Data Management Actions --
+
+  // -- Member Authentication --
+  const handleMemberLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const member = members.find(
+      (m) =>
+        (m.id === memberAccountInput || m.name === memberAccountInput) &&
+        m.password === memberPasswordInput
+    );
+
+    if (member) {
+      setIsMemberLoggedIn(true);
+      setCurrentUser(member);
+      setMemberAccountInput('');
+      setMemberPasswordInput('');
+    } else {
+      alert('帳號或密碼錯誤');
+    }
+  };
 
   const handleBackup = () => {
     const backupData: AppDataBackup = {
@@ -283,6 +286,14 @@ const App: React.FC = () => {
   // -- Content Actions --
   const handleAddWikiItem = async (newItem: Equipment) => {
     await addItem('wikiItems', newItem);
+    setEditingWikiItem(null); // Clear editing state after save
+  };
+
+  const handleEditWikiItem = (item: Equipment, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!requireAdmin()) return;
+    setEditingWikiItem(item);
+    setIsUploadModalOpen(true);
   };
 
   const handleDeleteWikiItem = async (id: string, e: React.MouseEvent) => {
@@ -817,7 +828,10 @@ const App: React.FC = () => {
             </div>
             {isAdmin && (
               <button
-                onClick={() => setIsUploadModalOpen(true)}
+                onClick={() => {
+                  setEditingWikiItem(null);
+                  setIsUploadModalOpen(true);
+                }}
                 className="bg-brand-600 text-white p-2.5 rounded-xl shadow-sm hover:bg-brand-700 transition-colors"
               >
                 <Upload size={20} />
@@ -862,13 +876,22 @@ const App: React.FC = () => {
               <div key={item.id} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-all group relative">
                 {/* Admin Delete Button - High Z-Index */}
                 {isAdmin && (
-                  <button
-                    onClick={(e) => handleDeleteWikiItem(item.id, e)}
-                    className="absolute top-2 right-2 p-2 bg-white rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 border border-gray-100 shadow-sm z-20 transition-all"
-                    title="刪除"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="absolute top-2 right-2 flex gap-2 z-20">
+                    <button
+                      onClick={(e) => handleEditWikiItem(item, e)}
+                      className="p-2 bg-white rounded-full text-gray-400 hover:text-brand-600 border border-gray-100 shadow-sm transition-all"
+                      title="編輯"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteWikiItem(item.id, e)}
+                      className="p-2 bg-white rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 border border-gray-100 shadow-sm transition-all"
+                      title="刪除"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 )}
                 <div className="flex items-start gap-4">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${item.contentType === 'video' ? 'bg-red-50 text-red-500' :
@@ -1238,45 +1261,7 @@ const App: React.FC = () => {
   return (
     <div className="relative h-full flex flex-col">
 
-      {/* Admin Login Modal (New) */}
-      {showAdminLogin && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl w-full max-w-xs overflow-hidden shadow-2xl flex flex-col p-6 space-y-4">
-            <div className="w-14 h-14 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center mx-auto">
-              <Shield size={28} />
-            </div>
-            <div className="text-center">
-              <h3 className="font-bold text-lg text-gray-800">管理者登入</h3>
-              <p className="text-sm text-gray-500 mt-1">請輸入管理者密碼以啟用編輯權限</p>
-            </div>
-            <form onSubmit={submitAdminLogin} className="space-y-3">
-              <input
-                type="password"
-                autoFocus
-                placeholder="輸入密碼"
-                value={adminPasswordInput}
-                onChange={(e) => setAdminPasswordInput(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-center"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAdminLogin(false)}
-                  className="flex-1 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors font-medium"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-bold"
-                >
-                  確認
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+
 
       {/* Package Services Modal */}
       {isPackageModalOpen && (
@@ -1556,6 +1541,7 @@ const App: React.FC = () => {
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onSave={handleAddWikiItem}
+        initialData={editingWikiItem}
       />
 
       {/* Space Manage Modal */}
@@ -1645,6 +1631,11 @@ const App: React.FC = () => {
         {activeTab === 'services' && renderServices()}
         {activeTab === 'business' && renderBusiness()}
       </div>
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+      />
     </div>
   );
 };
