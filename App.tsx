@@ -230,6 +230,7 @@ const App: React.FC = () => {
       setCurrentUser(member);
       setMemberAccountInput('');
       setMemberPasswordInput('');
+      setActiveTab('home');
     } else {
       alert('帳號或密碼錯誤');
     }
