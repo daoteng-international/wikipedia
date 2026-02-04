@@ -153,8 +153,8 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
               type="button"
               onClick={() => setContentType(type.id as any)}
               className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${contentType === type.id
-                  ? 'text-brand-600 border-b-2 border-brand-600 bg-brand-50'
-                  : 'text-gray-500 hover:bg-gray-50'
+                ? 'text-brand-600 border-b-2 border-brand-600 bg-brand-50'
+                : 'text-gray-500 hover:bg-gray-50'
                 }`}
             >
               <type.icon size={16} />
@@ -259,9 +259,16 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
                     ) : (
                       <img src={mediaPreview} alt="Preview" className="max-h-48 mx-auto rounded shadow-sm object-contain" />
                     )}
-                    <p className="mt-2 text-xs text-brand-600 font-bold">
-                      {isUploading ? '正在上傳至雲端...' : '點擊更換檔案'}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isUploading) fileInputRef.current?.click();
+                      }}
+                      className="mt-3 px-4 py-2 bg-white border border-brand-200 text-brand-600 rounded-lg text-sm font-bold shadow-sm hover:bg-brand-50 transition-all z-20 relative pointer-events-auto"
+                    >
+                      {isUploading ? '正在上傳至雲端...' : '更換檔案'}
+                    </button>
                   </div>
                 ) : (
                   <div className="text-gray-400">
