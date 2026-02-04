@@ -13,7 +13,7 @@ import {
   LogOut, Lock, Settings, Shield, Upload, Check, Download, UploadCloud, FileJson,
   Ship, GraduationCap, Tent, Sparkles, Clock, History, CreditCard, Calendar
 } from 'lucide-react';
-import { BRANCHES, EQUIPMENTS, ANNOUNCEMENTS, INITIAL_SPACES, SPACE_AMENITIES, WIKI_CATEGORIES, BUSINESS_PARTNERS, BUSINESS_PARTNER_CATEGORIES, INITIAL_OFFICE_TYPES, INITIAL_MEMBERS, RULES } from './constants';
+import { BRANCHES, EQUIPMENTS, ANNOUNCEMENTS, INITIAL_SPACES, SPACE_AMENITIES, WIKI_CATEGORIES, BUSINESS_PARTNERS, BUSINESS_PARTNER_CATEGORIES, INITIAL_OFFICE_TYPES, INITIAL_MEMBERS, RULES, INITIAL_VALUE_SERVICES } from './constants';
 import { BranchId, Equipment, Announcement, LocationSpace, WikiCategory, BusinessPartner, OfficeType, AppDataBackup, MemberProfile } from './types';
 import * as Types from './types';
 import ValueServices from './components/ValueServices';
@@ -24,8 +24,9 @@ import SpaceManageModal from './components/SpaceManageModal';
 import BusinessPartnerModal from './components/BusinessPartnerModal';
 import OfficeEditModal from './components/OfficeEditModal';
 import MemberManageModal from './components/MemberManageModal';
+import ValueServiceModal from './components/ValueServiceModal'; // New Import
 import { subscribeToCollection, addItem, updateItem, deleteItem } from './lib/firebaseClient';
-import { seedFirestore } from './lib/seed';
+import { seedFirestore, seedValueServices } from './lib/seed';
 import { db, auth } from './firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 
@@ -92,6 +93,9 @@ const App: React.FC = () => {
   const [activeOfficeImage, setActiveOfficeImage] = useState<string>(''); // For gallery
 
   // -- Service State --
+  const [valueServices, setValueServices] = useState<Types.ValueService[]>([]); // New State
+  const [isValueServiceModalOpen, setIsValueServiceModalOpen] = useState(false);
+  const [editingValueService, setEditingValueService] = useState<Types.ValueService | null>(null);
   const [isMealModalOpen, setIsMealModalOpen] = useState(false);
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
 
@@ -107,6 +111,7 @@ const App: React.FC = () => {
     const unsubOffice = subscribeToCollection('officeTypes', setOfficeTypes);
     const unsubMembers = subscribeToCollection('members', setMembers);
     const unsubBranches = subscribeToCollection('branches', setBranches);
+    const unsubValueServices = subscribeToCollection('valueServices', setValueServices); // Sync
 
     return () => {
       unsubWiki();
@@ -116,6 +121,7 @@ const App: React.FC = () => {
       unsubOffice();
       unsubMembers();
       unsubBranches();
+      unsubValueServices();
     };
   }, []);
 
@@ -171,11 +177,18 @@ const App: React.FC = () => {
   }, [members]);
 
   // Auto-seed if empty
+
+  // Auto-seed if empty
   useEffect(() => {
     if (wikiItems.length === 0 && announcements.length === 0) {
       seedFirestore();
     }
-  }, [wikiItems.length, announcements.length]);
+
+    // Seed Value Services if empty
+    if (valueServices.length === 0) {
+      seedValueServices();
+    }
+  }, [wikiItems.length, announcements.length, valueServices.length]);
 
   // -- Auth Actions --
 
@@ -444,6 +457,28 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveValueService = async (service: Partial<Types.ValueService>) => {
+    if (editingValueService) {
+      // Update
+      await updateItem('valueServices', editingValueService.id, service);
+    } else {
+      // Create
+      await addItem('valueServices', service);
+    }
+    setEditingValueService(null);
+  };
+
+  const handleEditValueService = (service: Types.ValueService) => {
+    setEditingValueService(service);
+    setIsValueServiceModalOpen(true);
+  };
+
+  const handleDeleteValueService = async (id: string) => {
+    if (window.confirm('確定要刪除此服務嗎？')) {
+      await deleteItem('valueServices', id);
+    }
+  };
+
   // -- Views --
 
   const renderHome = () => (
@@ -638,7 +673,25 @@ const App: React.FC = () => {
 
       {/* Value Added Services */}
       <div className="px-6">
-        <ValueServices onServiceClick={handleValueServiceClick} />
+        <ValueServices
+          services={valueServices}
+          isAdmin={isAdmin}
+          onServiceClick={handleValueServiceClick}
+          onAdd={() => {
+            setEditingValueService(null);
+            setIsValueServiceModalOpen(true);
+          }}
+          onEdit={handleEditValueService}
+          onDelete={handleDeleteValueService}
+        />
+
+        {/* Modals */}
+        <ValueServiceModal
+          isOpen={isValueServiceModalOpen}
+          onClose={() => setIsValueServiceModalOpen(false)}
+          onSave={handleSaveValueService}
+          initialData={editingValueService || undefined}
+        />
       </div>
     </div>
   );

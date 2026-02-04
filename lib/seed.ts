@@ -1,6 +1,6 @@
 import { db } from '../firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
-import { BRANCHES, EQUIPMENTS, ANNOUNCEMENTS, INITIAL_SPACES, BUSINESS_PARTNERS, INITIAL_OFFICE_TYPES, INITIAL_MEMBERS } from '../constants';
+import { BRANCHES, EQUIPMENTS, ANNOUNCEMENTS, INITIAL_SPACES, BUSINESS_PARTNERS, INITIAL_OFFICE_TYPES, INITIAL_MEMBERS, INITIAL_VALUE_SERVICES } from '../constants';
 
 export const seedFirestore = async () => {
     console.log('Starting seed...');
@@ -41,8 +41,25 @@ export const seedFirestore = async () => {
             await setDoc(doc(collection(db, 'members'), member.id), member);
         }
 
+        // Seed value services
+        for (const service of INITIAL_VALUE_SERVICES) {
+            await setDoc(doc(collection(db, 'valueServices'), service.id), service);
+        }
+
         console.log('Seed completed successfully!');
     } catch (error) {
         console.error('Seed failed:', error);
+    }
+};
+
+export const seedValueServices = async () => {
+    console.log('Seeding Value Services only...');
+    try {
+        for (const service of INITIAL_VALUE_SERVICES) {
+            await setDoc(doc(collection(db, 'valueServices'), service.id), service);
+        }
+        console.log('Value Services seeded successfully!');
+    } catch (error) {
+        console.error('Value Services seed failed:', error);
     }
 };

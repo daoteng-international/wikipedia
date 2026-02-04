@@ -106,3 +106,17 @@ export interface AppDataBackup {
   officeTypes: OfficeType[];
   members: MemberProfile[];
 }
+
+export type ValueServiceCategory = '加值商務' | '數位升級' | '心靈成長' | '其他';
+
+export interface ValueService {
+  id: string;
+  title: string;
+  category: ValueServiceCategory;
+  iconName: string;
+  color: string;
+  bg: string;
+  desc: string;
+  link?: string;
+  order?: number;
+}

@@ -1,6 +1,6 @@
 
-import { Branch, BranchId, Equipment, FoodSpot, Announcement, LocationSpace, BusinessPartner, OfficeType, MemberProfile } from './types';
-import { Printer, Wifi, Projector, KeyRound, Coffee, MonitorPlay } from 'lucide-react';
+import { Branch, BranchId, Equipment, FoodSpot, Announcement, LocationSpace, BusinessPartner, OfficeType, MemberProfile, ValueService } from './types';
+import { Printer, Wifi, Projector, KeyRound, Coffee, MonitorPlay, Building2, Calculator, Users, Database, Globe, Ship, Sparkles, Utensils } from 'lucide-react';
 
 export const BRANCHES: Branch[] = [
   {
@@ -209,7 +209,7 @@ export const EQUIPMENTS: Equipment[] = [
     iconName: 'Map',
     description: '27F 逃生路線與空間配置圖。',
     contentType: 'image',
-    mediaUrl: 'https://picsum.photos/800/600?random=100', 
+    mediaUrl: 'https://picsum.photos/800/600?random=100',
     uploadDate: '2023-09-01'
   },
   {
@@ -235,27 +235,27 @@ export const FOOD_MAP: FoodSpot[] = [
 ];
 
 export const ANNOUNCEMENTS: Announcement[] = [
-  { 
-    id: '1', 
-    title: '10/25 民權館停電通知', 
-    date: '2023-10-25', 
+  {
+    id: '1',
+    title: '10/25 民權館停電通知',
+    date: '2023-10-25',
     type: 'alert',
     details: '因台電進行線路維護工程，民權館將於上午 09:00 至 11:00 暫停供電。請提早儲存檔案並將電腦關機。'
   },
-  { 
-    id: '2', 
-    title: '新進駐夥伴歡迎會', 
-    date: '2025-10-22', 
+  {
+    id: '2',
+    title: '新進駐夥伴歡迎會',
+    date: '2025-10-22',
     type: 'event',
     details: '歡迎本月新加入的 5 組團隊！現場備有輕食與飲料，歡迎大家來交流認識。',
     link: 'https://forms.google.com/example'
   },
-  { 
-    id: '3', 
-    title: '11月份會議室點數發放', 
-    date: '2023-10-28', 
+  {
+    id: '3',
+    title: '11月份會議室點數發放',
+    date: '2023-10-28',
     type: 'info',
-    details: '11月份的會議室點數已匯入各公司帳戶，請至會員系統查詢。' 
+    details: '11月份的會議室點數已匯入各公司帳戶，請至會員系統查詢。'
   },
 ];
 
@@ -335,5 +335,87 @@ export const INITIAL_MEMBERS: MemberProfile[] = [
     meetingPointsTotal: 200,
     meetingPointsUsed: 150,
     contractDate: '2025/06/30'
+  }
+];
+
+export const INITIAL_VALUE_SERVICES: ValueService[] = [
+  // 加值商務
+  {
+    id: 'virtual-office',
+    title: '虛擬辦公室',
+    category: '加值商務',
+    iconName: 'Building2',
+    color: 'text-blue-600',
+    bg: 'bg-blue-50',
+    desc: '工商登記、借址營登',
+    link: 'https://daoteng-international-smart-virtue-office-759903762116.us-west1.run.app'
+  },
+  {
+    id: 'accountant',
+    title: '會計師服務',
+    category: '加值商務',
+    iconName: 'Calculator',
+    color: 'text-blue-600',
+    bg: 'bg-blue-50',
+    desc: '稅務申報、記帳服務'
+  },
+  {
+    id: 'consulting',
+    title: '顧問諮詢',
+    category: '加值商務',
+    iconName: 'Users',
+    color: 'text-blue-600',
+    bg: 'bg-blue-50',
+    desc: '法律、營運顧問媒合'
+  },
+  // 數位升級
+  {
+    id: 'erp-crm',
+    title: 'ERP/CRM',
+    category: '數位升級',
+    iconName: 'Database',
+    color: 'text-purple-600',
+    bg: 'bg-purple-50',
+    desc: '企業資源規劃系統',
+    link: 'https://deltra.org/'
+  },
+  {
+    id: 'web-seo',
+    title: '官網/SEO',
+    category: '數位升級',
+    iconName: 'Globe',
+    color: 'text-purple-600',
+    bg: 'bg-purple-50',
+    desc: '網站建置與流量優化'
+  },
+  // 心靈成長
+  {
+    id: 'yacht',
+    title: '娛樂遊艇',
+    category: '心靈成長',
+    iconName: 'Ship',
+    color: 'text-rose-600',
+    bg: 'bg-rose-50',
+    desc: '私人包船、海上派對',
+    link: 'https://www.daoteng.org/cruise'
+  },
+  {
+    id: 'spiritual',
+    title: '心靈課程',
+    category: '心靈成長',
+    iconName: 'Sparkles',
+    color: 'text-rose-600',
+    bg: 'bg-rose-50',
+    desc: '冥想、身心靈平衡'
+  },
+  // 其他
+  {
+    id: 'meal',
+    title: '代訂餐飲',
+    category: '其他',
+    iconName: 'Utensils',
+    color: 'text-orange-600',
+    bg: 'bg-orange-50',
+    desc: '會議便當、下午茶'
   }
 ];
