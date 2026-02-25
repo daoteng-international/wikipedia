@@ -1159,7 +1159,7 @@ const App: React.FC = () => {
           <div className="mt-8 flex items-center gap-2 text-gray-400 text-sm">
             <ShieldCheck size={14} />
             <button onClick={handleAdminToggle} className="hover:text-gray-600 underline">
-              {isAdmin ? '管理者已登入' : '管理者登入'}
+              {isAdmin ? '管理者已登入，點我登出' : '管理者登入'}
             </button>
           </div>
         </div>
