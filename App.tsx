@@ -84,6 +84,10 @@ const App: React.FC = () => {
   const [activePartnerCategory, setActivePartnerCategory] = useState<string>('All');
   const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
   const [editingPartner, setEditingPartner] = useState<BusinessPartner | null>(null);
+  const [selectedPartner, setSelectedPartner] = useState<BusinessPartner | null>(null); // Detail view
+
+  // -- Wiki Detail State --
+  const [selectedWikiItem, setSelectedWikiItem] = useState<Equipment | null>(null); // Detail view
 
   // -- Office Types State --
   const [officeTypes, setOfficeTypes] = useState<OfficeType[]>(INITIAL_OFFICE_TYPES);
@@ -934,7 +938,7 @@ const App: React.FC = () => {
           {filteredItems.map(item => {
             const Icon = iconMap[item.iconName] || FileText;
             return (
-              <div key={item.id} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-all group relative">
+              <div key={item.id} onClick={() => setSelectedWikiItem(item)} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-all group relative cursor-pointer">
                 {/* Admin Delete Button - High Z-Index */}
                 {isAdmin && (
                   <div className="absolute top-2 right-2 flex gap-2 z-20">
@@ -1100,7 +1104,7 @@ const App: React.FC = () => {
 
         <div className="grid grid-cols-1 gap-4">
           {filteredPartners.map(partner => (
-            <div key={partner.id} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex gap-4 group hover:border-brand-200 transition-all relative">
+            <div key={partner.id} onClick={() => setSelectedPartner(partner)} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex gap-4 group hover:border-brand-200 transition-all relative cursor-pointer">
               <div className={`w-16 h-16 rounded-xl shrink-0 flex items-center justify-center overflow-hidden ${partner.logoUrl ? 'bg-white border border-gray-100' : partner.logoColor + ' text-white'}`}>
                 {partner.logoUrl ? (
                   <img src={partner.logoUrl} alt={partner.name} className="w-full h-full object-cover" />
@@ -1555,6 +1559,256 @@ const App: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ===== Space Detail Modal ===== */}
+      {selectedSpace && (
+        <div className="absolute inset-0 z-50 bg-white flex flex-col animate-in slide-in-from-bottom duration-300">
+          {/* Header Gallery */}
+          <div className="relative h-64 shrink-0 bg-black">
+            <button
+              onClick={() => setSelectedSpace(null)}
+              className="absolute top-4 left-4 z-20 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 backdrop-blur-sm"
+            >
+              <ChevronDown size={24} className="rotate-90" />
+            </button>
+            {/* Main Image / Video */}
+            {(selectedSpace.videoUrls || (selectedSpace.videoUrl ? [selectedSpace.videoUrl] : [])).some(v => activeSpaceImage === v) ? (
+              <video src={activeSpaceImage} controls autoPlay className="w-full h-full object-contain" />
+            ) : (
+              <img src={activeSpaceImage} alt={selectedSpace.name} className="w-full h-full object-cover" />
+            )}
+            {selectedSpace.capacity && (
+              <div className="absolute top-4 right-4 bg-black/60 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm z-10 font-bold">
+                {selectedSpace.capacity}
+              </div>
+            )}
+            {/* Gallery Thumbs */}
+            <div className="absolute bottom-3 left-3 right-3 flex gap-2 overflow-x-auto no-scrollbar z-10">
+              {(selectedSpace.videoUrls && selectedSpace.videoUrls.length > 0
+                ? selectedSpace.videoUrls
+                : (selectedSpace.videoUrl ? [selectedSpace.videoUrl] : [])
+              ).map((vUrl, vIdx) => (
+                <button
+                  key={`sv-${vIdx}`}
+                  onClick={() => setActiveSpaceImage(vUrl)}
+                  className={`w-14 h-10 rounded-lg overflow-hidden border-2 flex-shrink-0 relative ${activeSpaceImage === vUrl ? 'border-brand-500' : 'border-white/50'}`}
+                >
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <PlayCircle size={16} className="text-white" />
+                  </div>
+                </button>
+              ))}
+              {selectedSpace.images.map((img, idx) => (
+                <button
+                  key={`si-${idx}`}
+                  onClick={() => setActiveSpaceImage(img)}
+                  className={`w-14 h-10 rounded-lg overflow-hidden border-2 flex-shrink-0 ${activeSpaceImage === img ? 'border-brand-500' : 'border-white/50'}`}
+                >
+                  <img src={img} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedSpace.name}</h2>
+            <p className="text-sm text-gray-600 mb-6 whitespace-pre-wrap">{selectedSpace.description}</p>
+            {selectedSpace.features && selectedSpace.features.length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                  <Star size={18} className="text-brand-500" /> 空間設備
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {selectedSpace.features.map(fid => {
+                    const amenity = SPACE_AMENITIES.find(a => a.id === fid);
+                    const Icon = amenity ? iconMap[amenity.iconName] : Check;
+                    return (
+                      <div key={fid} className="flex items-center gap-2 text-sm bg-gray-50 p-2.5 rounded-lg">
+                        <Icon size={16} className="text-gray-400" />
+                        <span>{amenity?.label || fid}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Footer CTA */}
+          <div className="p-4 border-t border-gray-100 bg-white safe-area-bottom">
+            <button
+              onClick={() => window.open('https://daoteng.org/contact', '_blank')}
+              className="w-full bg-brand-600 text-white py-3.5 rounded-xl font-bold text-lg shadow-lg hover:bg-brand-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <Mail size={20} /> 預約參觀 / 詢價
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Wiki Detail Modal ===== */}
+      {selectedWikiItem && (
+        <div className="absolute inset-0 z-50 bg-white flex flex-col animate-in slide-in-from-bottom duration-300">
+          {/* Header */}
+          <div className="bg-brand-600 p-4 text-white flex justify-between items-center shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                {(() => { const Icon = iconMap[selectedWikiItem.iconName] || FileText; return <Icon size={20} />; })()}
+              </div>
+              <div>
+                <h3 className="font-bold text-lg leading-tight">{selectedWikiItem.title}</h3>
+                <span className="text-xs text-white/70">
+                  {WIKI_CATEGORIES.find(c => c.id === selectedWikiItem.category)?.label}
+                </span>
+              </div>
+            </div>
+            <button onClick={() => setSelectedWikiItem(null)} className="hover:bg-brand-700 p-2 rounded-full">
+              <X size={20} />
+            </button>
+          </div>
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {selectedWikiItem.description && (
+              <p className="text-sm text-gray-600">{selectedWikiItem.description}</p>
+            )}
+
+            {/* 操作步驟 */}
+            {selectedWikiItem.instructions && selectedWikiItem.instructions.length > 0 && (
+              <div>
+                <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                  <FileText size={16} className="text-brand-500" /> 操作步驟
+                </h4>
+                <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                  {selectedWikiItem.instructions.map((inst, i) => (
+                    <div key={i} className="flex gap-3">
+                      <span className="w-6 h-6 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center shrink-0 font-bold">{i + 1}</span>
+                      <span className="text-sm text-gray-700 pt-0.5">{inst}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 圖片 */}
+            {(() => {
+              const allImages = selectedWikiItem.imageUrls && selectedWikiItem.imageUrls.length > 0
+                ? selectedWikiItem.imageUrls
+                : (selectedWikiItem.contentType === 'image' && selectedWikiItem.mediaUrl ? [selectedWikiItem.mediaUrl] : []);
+              if (allImages.length === 0) return null;
+              return (
+                <div>
+                  <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <ImageIcon size={16} className="text-purple-500" /> 圖片說明
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {allImages.map((url, idx) => (
+                      <div key={idx} className="rounded-xl overflow-hidden bg-black/5 aspect-square cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(url, '_blank')}>
+                        <img src={url} alt={`${selectedWikiItem.title} ${idx + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 影片 */}
+            {(() => {
+              const allVideos = selectedWikiItem.mediaUrls && selectedWikiItem.mediaUrls.length > 0
+                ? selectedWikiItem.mediaUrls
+                : (selectedWikiItem.contentType === 'video' && selectedWikiItem.mediaUrl ? [selectedWikiItem.mediaUrl] : []);
+              if (allVideos.length === 0) return null;
+              return (
+                <div>
+                  <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <Video size={16} className="text-red-500" /> 教學影片
+                  </h4>
+                  <div className="space-y-3">
+                    {allVideos.map((url, vIdx) => (
+                      <div key={vIdx} className="rounded-xl overflow-hidden relative bg-black/5">
+                        <video src={url} controls className="w-full aspect-video object-contain" />
+                        {allVideos.length > 1 && (
+                          <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                            影片 {vIdx + 1}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {selectedWikiItem.uploadDate && (
+              <p className="text-xs text-gray-400 text-right">更新日期：{selectedWikiItem.uploadDate}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== Partner Detail Modal ===== */}
+      {selectedPartner && (
+        <div className="absolute inset-0 z-50 bg-white flex flex-col animate-in slide-in-from-bottom duration-300">
+          {/* Header */}
+          <div className="bg-brand-600 p-4 text-white flex justify-between items-center shrink-0">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-xl overflow-hidden shrink-0 ${selectedPartner.logoUrl ? 'bg-white border border-white/30' : selectedPartner.logoColor + ' text-white'} flex items-center justify-center`}>
+                {selectedPartner.logoUrl ? (
+                  <img src={selectedPartner.logoUrl} alt={selectedPartner.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-lg font-bold">{selectedPartner.name.charAt(0)}</span>
+                )}
+              </div>
+              <div>
+                <h3 className="font-bold text-lg leading-tight">{selectedPartner.name}</h3>
+                <span className="text-xs text-white/70">{selectedPartner.category}</span>
+              </div>
+            </div>
+            <button onClick={() => setSelectedPartner(null)} className="hover:bg-brand-700 p-2 rounded-full">
+              <X size={20} />
+            </button>
+          </div>
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div>
+              <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                <Briefcase size={16} className="text-brand-500" /> 服務介紹
+              </h4>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{selectedPartner.description}</p>
+            </div>
+
+            {/* DM 圖片 */}
+            {selectedPartner.images && selectedPartner.images.length > 0 && (
+              <div>
+                <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                  <ImageIcon size={16} className="text-purple-500" /> 活動 DM / 宣傳圖片
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {selectedPartner.images.map((img, idx) => (
+                    <div key={idx} className="rounded-xl overflow-hidden bg-black/5 aspect-square cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(img, '_blank')}>
+                      <img src={img} alt={`${selectedPartner.name} DM ${idx + 1}`} className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedPartner.website && (
+              <div>
+                <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+                  <Globe size={16} className="text-brand-500" /> 官方網站
+                </h4>
+                <a
+                  href={selectedPartner.website}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 text-brand-600 hover:text-brand-700 text-sm font-medium bg-brand-50 p-3 rounded-lg transition-colors"
+                >
+                  <ExternalLink size={16} /> {selectedPartner.website}
+                </a>
+              </div>
+            )}
           </div>
         </div>
       )}
