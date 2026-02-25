@@ -150,6 +150,7 @@ const App: React.FC = () => {
                 meetingPointsUsed: 0,
                 contractDate: 'N/A'
               });
+              setActiveTab('home');
             } else {
               // Not an admin role
               setIsAdmin(false);
