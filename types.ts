@@ -87,6 +87,7 @@ export interface BusinessPartner {
   website?: string;
   logoColor: string; // Fallback for mock UI purpose
   logoUrl?: string; // New: Uploaded image
+  images?: string[]; // DM/活動圖片 (multiple)
 }
 
 export interface MemberProfile {

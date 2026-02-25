@@ -1088,6 +1088,21 @@ const App: React.FC = () => {
                     <p className="text-sm text-gray-500 line-clamp-2 mb-3">{partner.description}</p>
                   </div>
 
+                  {/* DM / 活動圖片 */}
+                  {partner.images && partner.images.length > 0 && (
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 mb-2">
+                      {partner.images.map((img, imgIdx) => (
+                        <img
+                          key={imgIdx}
+                          src={img}
+                          alt={`${partner.name} DM ${imgIdx + 1}`}
+                          className="w-20 h-20 rounded-lg object-cover shrink-0 border border-gray-100 shadow-sm hover:shadow-md hover:scale-105 transition-all cursor-pointer"
+                          onClick={() => window.open(img, '_blank')}
+                        />
+                      ))}
+                    </div>
+                  )}
+
                   {partner.website && (
                     <a
                       href={partner.website}
