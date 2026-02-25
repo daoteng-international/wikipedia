@@ -1,13 +1,13 @@
 // components/SpaceManageModal.tsx
 
 import React, { useState, useRef } from 'react';
-import { 
+import {
   X, MapPin, Image as ImageIcon, Video, Check, Upload, Star, Trash2,
   Wifi, Projector, Tv, Presentation, Mic, Speaker, Wind, Zap, Coffee, Cloud, Loader2
 } from 'lucide-react';
 import { LocationSpace, BranchId } from '../types';
 import { SPACE_AMENITIES } from '../constants';
-import { uploadToCloud } from '../services/uploadService';
+import { uploadToCloud, uploadVideoToCloud } from '../services/uploadService';
 
 interface SpaceManageModalProps {
   isOpen: boolean;
@@ -25,13 +25,14 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [capacity, setCapacity] = useState('');
-  
+
   // Media State
   const [images, setImages] = useState<string[]>([]);
   const [coverIndex, setCoverIndex] = useState<number>(0);
-  const [videoPreview, setVideoPreview] = useState<string>('');
-  
+  const [videoPreviews, setVideoPreviews] = useState<string[]>([]);
+
   const [isUploading, setIsUploading] = useState(false);
+  const [isVideoUploading, setIsVideoUploading] = useState(false);
 
   // Amenities State
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
@@ -55,7 +56,7 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files) as File[];
       const remainingSlots = 4 - images.length;
-      
+
       if (files.length > remainingSlots) {
         alert(`最多只能上傳 4 張照片。您目前還能上傳 ${remainingSlots} 張。`);
         files.splice(remainingSlots);
@@ -64,12 +65,10 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
       if (files.length === 0) return;
 
       setIsUploading(true);
-      
+
       try {
-        // Upload all selected files concurrently
         const uploadPromises = files.map(file => uploadToCloud(file));
         const uploadedUrls = await Promise.all(uploadPromises);
-        
         setImages(prev => [...prev, ...uploadedUrls]);
       } catch (error) {
         alert("部分圖片上傳失敗，請檢查網路。");
@@ -83,36 +82,33 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
   const removeImage = (index: number) => {
     const newImages = images.filter((_, i) => i !== index);
     setImages(newImages);
-    
-    // Adjust cover index if needed
     if (index === coverIndex) {
-      setCoverIndex(0); // Reset to first
+      setCoverIndex(0);
     } else if (index < coverIndex) {
       setCoverIndex(coverIndex - 1);
     }
   };
 
-  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      // Note: Imgur handles images best. For videos, we might still resort to Blob for preview
-      // or warn user that large videos require YouTube links.
-      // For this "Network Mode" feature, let's keep video local/blob for now 
-      // OR try to upload if small. Imgur API does support video but logic is similar.
-      // Let's stick to Base64 for video (less critical) or Blob for now as video hosting is heavier.
-      // But user requested "All browsers". Let's try uploadToCloud for video too if small.
-      
-      if (file.size > 10 * 1024 * 1024) {
-         alert("影片檔案過大，建議使用 YouTube 連結。此處僅支援 10MB 以下預覽。");
-         return;
+  const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      setIsVideoUploading(true);
+
+      try {
+        const uploadPromises = files.map(file => uploadVideoToCloud(file));
+        const uploadedUrls = await Promise.all(uploadPromises);
+        setVideoPreviews(prev => [...prev, ...uploadedUrls]);
+      } catch (error) {
+        alert("部分影片上傳失敗，請檢查網路。");
+      } finally {
+        setIsVideoUploading(false);
+        if (videoInputRef.current) videoInputRef.current.value = '';
       }
-      
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if(ev.target?.result) setVideoPreview(ev.target.result as string);
-      };
-      reader.readAsDataURL(file);
     }
+  };
+
+  const removeVideo = (index: number) => {
+    setVideoPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -129,24 +125,27 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
       name,
       description,
       capacity,
-      imageUrl: images[coverIndex], // Set selected cover
+      imageUrl: images[coverIndex],
       images: images,
-      videoUrl: videoPreview,
+      videoUrl: videoPreviews[0] || '',
+      videoUrls: videoPreviews,
       features: selectedFeatures
     };
 
     onSave(newSpace);
-    
+
     // Reset form
     setName('');
     setDescription('');
     setCapacity('');
     setImages([]);
     setCoverIndex(0);
-    setVideoPreview('');
+    setVideoPreviews([]);
     setSelectedFeatures([]);
     onClose();
   };
+
+  const anyUploading = isUploading || isVideoUploading;
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -162,13 +161,13 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
-          
+
           {/* Name & Capacity */}
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">空間名稱 <span className="text-red-500">*</span></label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 required
                 value={name}
                 onChange={e => setName(e.target.value)}
@@ -178,8 +177,8 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">容納人數</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={capacity}
                 onChange={e => setCapacity(e.target.value)}
                 placeholder="10人"
@@ -191,7 +190,7 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">空間描述</label>
-            <textarea 
+            <textarea
               rows={3}
               value={description}
               onChange={e => setDescription(e.target.value)}
@@ -215,8 +214,8 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
                     type="button"
                     onClick={() => handleFeatureToggle(amenity.id)}
                     className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-bold transition-all ${
-                      isSelected 
-                        ? 'bg-brand-50 border-brand-500 text-brand-600' 
+                      isSelected
+                        ? 'bg-brand-50 border-brand-500 text-brand-600'
                         : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
                     }`}
                    >
@@ -238,29 +237,24 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
               </label>
               {isUploading && <span className="text-xs text-brand-600 flex items-center gap-1 animate-pulse"><Cloud size={12}/> 上傳雲端中...</span>}
             </div>
-            
-            {/* Grid for uploaded images */}
+
             {images.length > 0 && (
               <div className="grid grid-cols-4 gap-2 mb-3">
                 {images.map((img, idx) => (
-                  <div 
-                    key={idx} 
+                  <div
+                    key={idx}
                     className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer group border-2 transition-all ${
                       coverIndex === idx ? 'border-brand-500 ring-2 ring-brand-200' : 'border-gray-200 hover:border-gray-300'
                     }`}
                     onClick={() => setCoverIndex(idx)}
                   >
                     <img src={img} alt={`Upload ${idx}`} className="w-full h-full object-cover" />
-                    
-                    {/* Cover Indicator */}
                     {coverIndex === idx && (
                       <div className="absolute top-1 left-1 bg-brand-500 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm font-bold flex items-center gap-0.5">
                         <Star size={8} fill="currentColor" /> 封面
                       </div>
                     )}
-
-                    {/* Delete Button */}
-                    <button 
+                    <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
                       className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all"
@@ -269,10 +263,9 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
                     </button>
                   </div>
                 ))}
-                
-                {/* Add Button Placeholder inside grid if < 4 */}
+
                 {images.length < 4 && (
-                   <button 
+                   <button
                      type="button"
                      disabled={isUploading}
                      onClick={() => imageInputRef.current?.click()}
@@ -285,9 +278,8 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
               </div>
             )}
 
-            {/* Initial Big Upload Box if Empty */}
             {images.length === 0 && (
-              <div 
+              <div
                 onClick={() => !isUploading && imageInputRef.current?.click()}
                 className={`border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-50 cursor-pointer h-32 flex items-center justify-center flex-col text-gray-400 ${isUploading ? 'opacity-50 cursor-wait' : ''}`}
               >
@@ -300,10 +292,10 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
               </div>
             )}
 
-            <input 
-              type="file" 
-              ref={imageInputRef} 
-              className="hidden" 
+            <input
+              type="file"
+              ref={imageInputRef}
+              className="hidden"
               accept="image/*"
               multiple
               onChange={handleImageChange}
@@ -311,30 +303,59 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
             />
           </div>
 
-          {/* Video Upload */}
+          {/* Multi-Video Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <Video size={16} /> 導覽影片 (選填)
-            </label>
-            <div 
-              onClick={() => videoInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-50 cursor-pointer relative overflow-hidden h-24 flex items-center justify-center"
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                <Video size={16} /> 導覽影片 (選填，可多支)
+              </label>
+              {isVideoUploading && <span className="text-xs text-brand-600 flex items-center gap-1 animate-pulse"><Cloud size={12}/> 影片上傳中...</span>}
+            </div>
+
+            {/* Uploaded Video List */}
+            {videoPreviews.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {videoPreviews.map((url, idx) => (
+                  <div key={idx} className="relative rounded-lg overflow-hidden border border-gray-200 bg-black/5">
+                    <video src={url} controls className="w-full max-h-32 object-contain" />
+                    <button
+                      type="button"
+                      onClick={() => removeVideo(idx)}
+                      className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full shadow-md hover:bg-red-600 transition-colors"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                    <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                      影片 {idx + 1}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add Video Button */}
+            <div
+              onClick={() => !isVideoUploading && videoInputRef.current?.click()}
+              className={`border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-50 cursor-pointer h-20 flex items-center justify-center ${isVideoUploading ? 'opacity-50 cursor-wait' : ''}`}
             >
-              <input 
-                type="file" 
-                ref={videoInputRef} 
-                className="hidden" 
+              <input
+                type="file"
+                ref={videoInputRef}
+                className="hidden"
                 accept="video/*"
+                multiple
                 onChange={handleVideoChange}
+                disabled={isVideoUploading}
               />
-              {videoPreview ? (
-                 <div className="w-full h-full bg-black rounded-lg flex items-center justify-center text-white">
-                   <span className="text-xs">影片已選擇 (僅限本機預覽)</span>
-                 </div>
+              {isVideoUploading ? (
+                <div className="text-gray-400 flex flex-col items-center">
+                  <Loader2 size={20} className="mb-1 animate-spin text-brand-500" />
+                  <span className="text-xs">影片上傳中...</span>
+                </div>
               ) : (
                 <div className="text-gray-400 flex flex-col items-center">
                   <Upload size={20} className="mb-1" />
-                  <span className="text-xs">點擊上傳影片 (建議使用外部連結)</span>
+                  <span className="text-xs">{videoPreviews.length === 0 ? '點擊上傳影片 (自動上傳雲端)' : '點擊追加更多影片'}</span>
                 </div>
               )}
             </div>
@@ -342,20 +363,20 @@ const SpaceManageModal: React.FC<SpaceManageModalProps> = ({ isOpen, onClose, on
 
           {/* Footer Actions */}
           <div className="pt-2 flex gap-3">
-             <button 
+             <button
               type="button"
               onClick={onClose}
-              disabled={isUploading}
+              disabled={anyUploading}
               className="flex-1 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
             >
               取消
             </button>
-            <button 
+            <button
               type="submit"
-              disabled={isUploading}
+              disabled={anyUploading}
               className="flex-1 py-2 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-400"
             >
-              <Check size={18} /> {isUploading ? '上傳中...' : '儲存空間'}
+              <Check size={18} /> {anyUploading ? '上傳中...' : '儲存空間'}
             </button>
           </div>
 

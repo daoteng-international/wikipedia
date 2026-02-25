@@ -819,11 +819,16 @@ const App: React.FC = () => {
                   </button>
                 )}
                 {/* Play Icon Overlay if video exists */}
-                {space.videoUrl && (
+                {((space.videoUrls && space.videoUrls.length > 0) || space.videoUrl) && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors z-0">
                     <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white">
                       <PlayCircle size={20} fill="currentColor" className="opacity-90" />
                     </div>
+                    {(space.videoUrls?.length || 0) > 1 && (
+                      <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                        {space.videoUrls!.length} 支影片
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -978,13 +983,24 @@ const App: React.FC = () => {
                       </div>
                     )}
 
-                    {(item.contentType === 'video' || item.contentType === 'image') && item.mediaUrl && (
+                    {item.contentType === 'video' && (item.mediaUrls?.length || item.mediaUrl) && (
+                      <div className="mt-2 space-y-2">
+                        {(item.mediaUrls && item.mediaUrls.length > 0 ? item.mediaUrls : (item.mediaUrl ? [item.mediaUrl] : [])).map((url, vIdx) => (
+                          <div key={vIdx} className="rounded-lg overflow-hidden relative aspect-video bg-black/5">
+                            <video src={url} controls className="w-full h-full object-contain" />
+                            {(item.mediaUrls?.length || 0) > 1 && (
+                              <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                影片 {vIdx + 1}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {item.contentType === 'image' && item.mediaUrl && (
                       <div className="mt-2 rounded-lg overflow-hidden relative aspect-video bg-black/5">
-                        {item.contentType === 'video' ? (
-                          <video src={item.mediaUrl} controls className="w-full h-full object-contain" />
-                        ) : (
-                          <img src={item.mediaUrl} alt={item.title} className="w-full h-full object-contain" />
-                        )}
+                        <img src={item.mediaUrl} alt={item.title} className="w-full h-full object-contain" />
                       </div>
                     )}
                   </div>
@@ -1509,25 +1525,34 @@ const App: React.FC = () => {
               <ChevronDown size={24} className="rotate-90" />
             </button>
 
-            {activeOfficeImage === selectedOfficeType.videoUrl ? (
-              <video src={selectedOfficeType.videoUrl} controls autoPlay className="w-full h-full object-contain" />
+            {(selectedOfficeType.videoUrls || (selectedOfficeType.videoUrl ? [selectedOfficeType.videoUrl] : [])).some(v => activeOfficeImage === v) ? (
+              <video src={activeOfficeImage} controls autoPlay className="w-full h-full object-contain" />
             ) : (
               <img src={activeOfficeImage} alt="Detail" className="w-full h-full object-cover" />
             )}
 
             {/* Gallery Thumbs */}
             <div className="absolute bottom-4 left-4 right-4 flex gap-2 overflow-x-auto no-scrollbar z-10">
-              {selectedOfficeType.videoUrl && (
+              {(selectedOfficeType.videoUrls && selectedOfficeType.videoUrls.length > 0
+                ? selectedOfficeType.videoUrls
+                : (selectedOfficeType.videoUrl ? [selectedOfficeType.videoUrl] : [])
+              ).map((vUrl, vIdx) => (
                 <button
-                  onClick={() => setActiveOfficeImage(selectedOfficeType.videoUrl!)}
-                  className={`w-16 h-12 rounded-lg overflow-hidden border-2 flex-shrink-0 relative ${activeOfficeImage === selectedOfficeType.videoUrl ? 'border-brand-500' : 'border-white/50'
+                  key={`video-${vIdx}`}
+                  onClick={() => setActiveOfficeImage(vUrl)}
+                  className={`w-16 h-12 rounded-lg overflow-hidden border-2 flex-shrink-0 relative ${activeOfficeImage === vUrl ? 'border-brand-500' : 'border-white/50'
                     }`}
                 >
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                     <PlayCircle size={20} className="text-white" />
                   </div>
+                  {(selectedOfficeType.videoUrls?.length || 0) > 1 && (
+                    <div className="absolute bottom-0.5 right-0.5 bg-black/70 text-white text-[8px] px-1 rounded font-bold">
+                      {vIdx + 1}
+                    </div>
+                  )}
                 </button>
-              )}
+              ))}
               {selectedOfficeType.images.map((img, idx) => (
                 <button
                   key={idx}

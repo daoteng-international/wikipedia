@@ -30,7 +30,8 @@ export interface LocationSpace {
   capacity?: string; // e.g., "10-12人"
   imageUrl: string; // Main display image (Cover)
   images: string[]; // All uploaded images (Gallery, max 4)
-  videoUrl?: string; // Tour video
+  videoUrl?: string; // Legacy single video (backward compat)
+  videoUrls?: string[]; // Multiple tour videos
   features?: string[]; // e.g., ["Projector", "Whiteboard"]
 }
 
@@ -40,7 +41,8 @@ export interface OfficeType {
   description: string;
   imageUrl: string; // Cover image
   images: string[]; // Gallery
-  videoUrl?: string;
+  videoUrl?: string; // Legacy single video (backward compat)
+  videoUrls?: string[]; // Multiple tour videos
   features?: string[];
 }
 
@@ -55,7 +57,8 @@ export interface Equipment {
   // New fields for Content Management
   contentType: 'guide' | 'video' | 'image';
   instructions?: string[]; // Optional, used if contentType is 'guide'
-  mediaUrl?: string; // Used if contentType is 'video' or 'image'
+  mediaUrl?: string; // Legacy single media (backward compat)
+  mediaUrls?: string[]; // Multiple videos/images
   uploadDate?: string;
 }
 

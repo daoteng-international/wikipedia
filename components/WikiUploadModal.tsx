@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react';
 import { X, Upload, FileText, Video, Image as ImageIcon, Plus, Trash2, Check, Cloud, Loader2 } from 'lucide-react';
 import { Equipment } from '../types';
 import { WIKI_CATEGORIES } from '../constants';
-import { uploadToCloud } from '../services/uploadService';
+import { uploadToCloud, uploadVideoToCloud } from '../services/uploadService';
 
 interface WikiUploadModalProps {
   isOpen: boolean;
@@ -21,9 +21,15 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
   // Guide State
   const [instructions, setInstructions] = useState<string[]>(initialData?.instructions && initialData.instructions.length > 0 ? initialData.instructions : ['']);
 
-  // Media State
+  // Media State — single image OR multiple videos
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string>(initialData?.mediaUrl || '');
+  // Multi-video state
+  const [videoUrls, setVideoUrls] = useState<string[]>(() => {
+    if (initialData?.mediaUrls && initialData.mediaUrls.length > 0) return initialData.mediaUrls;
+    if (initialData?.contentType === 'video' && initialData?.mediaUrl) return [initialData.mediaUrl];
+    return [];
+  });
 
   // Effect to reset or load data when modal opens/changes
   React.useEffect(() => {
@@ -35,6 +41,14 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
         setDescription(initialData.description);
         setInstructions(initialData.instructions && initialData.instructions.length > 0 ? initialData.instructions : ['']);
         setMediaPreview(initialData.mediaUrl || '');
+        // Load multi-video, fallback to single
+        if (initialData.mediaUrls && initialData.mediaUrls.length > 0) {
+          setVideoUrls(initialData.mediaUrls);
+        } else if (initialData.contentType === 'video' && initialData.mediaUrl) {
+          setVideoUrls([initialData.mediaUrl]);
+        } else {
+          setVideoUrls([]);
+        }
       } else {
         // Reset for new item
         setContentType('guide');
@@ -43,6 +57,7 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
         setDescription('');
         setInstructions(['']);
         setMediaPreview('');
+        setVideoUrls([]);
       }
       setMediaFile(null);
     }
@@ -52,15 +67,16 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
   const [isUploading, setIsUploading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
+  // Handle image file (single image, same as before)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setMediaFile(file);
 
-      // If it's an image, we try to upload to cloud immediately for network mode
       if (contentType === 'image') {
         setIsUploading(true);
         try {
@@ -68,21 +84,37 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
           setMediaPreview(url);
         } catch (error) {
           alert("圖片上傳失敗，將使用本地預覽。");
-          // Fallback to local reader
           const reader = new FileReader();
           reader.onloadend = () => { if (reader.result) setMediaPreview(reader.result as string); };
           reader.readAsDataURL(file);
         } finally {
           setIsUploading(false);
         }
-      } else {
-        // Video fallback (uploading large video to Imgur anonymous is hit or miss)
-        // For now, keep video local blob for preview, but warn user
-        const reader = new FileReader();
-        reader.onloadend = () => { if (reader.result) setMediaPreview(reader.result as string); };
-        reader.readAsDataURL(file);
       }
     }
+  };
+
+  // Handle video files (multiple)
+  const handleVideoFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      setIsUploading(true);
+
+      try {
+        const uploadPromises = files.map(file => uploadVideoToCloud(file));
+        const uploadedUrls = await Promise.all(uploadPromises);
+        setVideoUrls(prev => [...prev, ...uploadedUrls]);
+      } catch (error) {
+        alert("部分影片上傳失敗，請檢查網路。");
+      } finally {
+        setIsUploading(false);
+        if (videoInputRef.current) videoInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removeVideo = (index: number) => {
+    setVideoUrls(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleAddInstruction = () => {
@@ -111,10 +143,10 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
       contentType,
       iconName: contentType === 'video' ? 'MonitorPlay' : contentType === 'image' ? 'Image' : 'FileText',
       uploadDate: new Date().toISOString().split('T')[0],
-      // If guide
       instructions: contentType === 'guide' ? instructions.filter(i => i.trim() !== '') : [],
-      // If media
-      mediaUrl: mediaPreview,
+      // For video: use mediaUrls array; for image: use mediaUrl single
+      mediaUrl: contentType === 'video' ? (videoUrls[0] || '') : mediaPreview,
+      mediaUrls: contentType === 'video' ? videoUrls : undefined,
     };
 
     onSave(newItem);
@@ -125,6 +157,7 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
     setInstructions(['']);
     setMediaFile(null);
     setMediaPreview('');
+    setVideoUrls([]);
     onClose();
   };
 
@@ -233,10 +266,71 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
                 </div>
               ))}
             </div>
+          ) : contentType === 'video' ? (
+            /* ===== Multi-Video Upload Section ===== */
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="block text-sm font-medium text-gray-700">上傳影片 (可多支)</label>
+                {isUploading && <span className="text-xs text-brand-600 flex items-center gap-1 animate-pulse"><Cloud size={12}/> 上傳雲端中...</span>}
+              </div>
+
+              {/* Video List */}
+              {videoUrls.length > 0 && (
+                <div className="space-y-2">
+                  {videoUrls.map((url, idx) => (
+                    <div key={idx} className="relative rounded-lg overflow-hidden border border-gray-200 bg-black/5">
+                      <video src={url} controls className="w-full max-h-40 object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => removeVideo(idx)}
+                        className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full shadow-md hover:bg-red-600 transition-colors"
+                        title="移除此影片"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                      <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                        影片 {idx + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add Video Button */}
+              <div
+                onClick={() => !isUploading && videoInputRef.current?.click()}
+                className={`border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 hover:border-brand-400 transition-colors cursor-pointer ${isUploading ? 'cursor-wait opacity-60' : ''}`}
+              >
+                <input
+                  type="file"
+                  ref={videoInputRef}
+                  className="hidden"
+                  accept="video/*"
+                  multiple
+                  onChange={handleVideoFilesChange}
+                  disabled={isUploading}
+                />
+                {isUploading ? (
+                  <div className="text-gray-400">
+                    <Loader2 size={36} className="mx-auto mb-2 animate-spin text-brand-500" />
+                    <p className="text-sm font-medium">影片上傳中...</p>
+                  </div>
+                ) : (
+                  <div className="text-gray-400">
+                    <Video size={36} className="mx-auto mb-2" />
+                    <p className="text-sm font-medium">
+                      {videoUrls.length === 0 ? '點擊上傳影片' : '點擊追加更多影片'}
+                    </p>
+                    <p className="text-xs mt-1">支援 MP4, WebM，可一次選取多個檔案</p>
+                  </div>
+                )}
+              </div>
+            </div>
           ) : (
+            /* ===== Single Image Upload (unchanged) ===== */
             <div className="space-y-3">
               <label className="block text-sm font-medium text-gray-700">
-                上傳{contentType === 'video' ? '影片' : '圖片'}
+                上傳圖片
               </label>
 
               <div
@@ -247,18 +341,14 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
                   type="file"
                   ref={fileInputRef}
                   className="hidden"
-                  accept={contentType === 'video' ? "video/*" : "image/*"}
+                  accept="image/*"
                   onChange={handleFileChange}
                   disabled={isUploading}
                 />
 
                 {mediaPreview ? (
                   <div className="relative z-10">
-                    {contentType === 'video' ? (
-                      <video src={mediaPreview} controls className="max-h-48 mx-auto rounded shadow-sm" />
-                    ) : (
-                      <img src={mediaPreview} alt="Preview" className="max-h-48 mx-auto rounded shadow-sm object-contain" />
-                    )}
+                    <img src={mediaPreview} alt="Preview" className="max-h-48 mx-auto rounded shadow-sm object-contain" />
                     <button
                       type="button"
                       onClick={(e) => {
@@ -275,13 +365,13 @@ const WikiUploadModal: React.FC<WikiUploadModalProps> = ({ isOpen, onClose, onSa
                     {isUploading ? (
                       <Loader2 size={48} className="mx-auto mb-2 animate-spin text-brand-500" />
                     ) : (
-                      contentType === 'video' ? <Video size={48} className="mx-auto mb-2" /> : <Cloud size={48} className="mx-auto mb-2" />
+                      <Cloud size={48} className="mx-auto mb-2" />
                     )}
                     <p className="text-sm font-medium">
                       {isUploading ? '上傳中...' : '點擊此處上傳檔案'}
                     </p>
                     <p className="text-xs mt-1">
-                      {isUploading ? '請稍候' : (contentType === 'image' ? '自動轉為雲端連結 (JPG, PNG)' : '支援 MP4, WebM')}
+                      {isUploading ? '請稍候' : '自動轉為雲端連結 (JPG, PNG)'}
                     </p>
                   </div>
                 )}
