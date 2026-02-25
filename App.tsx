@@ -11,7 +11,8 @@ import {
   ChefHat, Sandwich, Calculator, Package, Inbox, Send,
   Edit2, Briefcase, Globe, Database, Building2, FileSignature, Laptop, ArrowRight,
   LogOut, Lock, Settings, Shield, Upload, Check, Download, UploadCloud, FileJson,
-  Ship, GraduationCap, Tent, Sparkles, Clock, History, CreditCard, Calendar
+  Ship, GraduationCap, Tent, Sparkles, Clock, History, CreditCard, Calendar,
+  Video
 } from 'lucide-react';
 import { BRANCHES, EQUIPMENTS, ANNOUNCEMENTS, INITIAL_SPACES, SPACE_AMENITIES, WIKI_CATEGORIES, BUSINESS_PARTNERS, BUSINESS_PARTNER_CATEGORIES, INITIAL_OFFICE_TYPES, INITIAL_MEMBERS, RULES, INITIAL_VALUE_SERVICES } from './constants';
 import { BranchId, Equipment, Announcement, LocationSpace, WikiCategory, BusinessPartner, OfficeType, AppDataBackup, MemberProfile } from './types';
@@ -954,8 +955,9 @@ const App: React.FC = () => {
                   </div>
                 )}
                 <div className="flex items-start gap-4">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${item.contentType === 'video' ? 'bg-red-50 text-red-500' :
-                    item.contentType === 'image' ? 'bg-purple-50 text-purple-500' :
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                    (item.mediaUrls?.length || (item.contentType === 'video' && item.mediaUrl)) ? 'bg-red-50 text-red-500' :
+                    (item.imageUrls?.length || (item.contentType === 'image' && item.mediaUrl)) ? 'bg-purple-50 text-purple-500' :
                       'bg-brand-50 text-brand-600'
                     }`}>
                     <Icon size={20} />
@@ -969,8 +971,9 @@ const App: React.FC = () => {
                     </div>
                     <p className="text-xs text-gray-500 mb-2">{item.description}</p>
 
-                    {item.contentType === 'guide' && item.instructions && (
-                      <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-600 space-y-1">
+                    {/* 操作步驟 — show if instructions exist */}
+                    {item.instructions && item.instructions.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-600 space-y-1 mb-2">
                         {item.instructions.slice(0, 3).map((inst, i) => (
                           <div key={i} className="flex gap-2">
                             <span className="text-brand-400 font-mono">{i + 1}.</span>
@@ -983,26 +986,54 @@ const App: React.FC = () => {
                       </div>
                     )}
 
-                    {item.contentType === 'video' && (item.mediaUrls?.length || item.mediaUrl) && (
-                      <div className="mt-2 space-y-2">
-                        {(item.mediaUrls && item.mediaUrls.length > 0 ? item.mediaUrls : (item.mediaUrl ? [item.mediaUrl] : [])).map((url, vIdx) => (
-                          <div key={vIdx} className="rounded-lg overflow-hidden relative aspect-video bg-black/5">
-                            <video src={url} controls className="w-full h-full object-contain" />
-                            {(item.mediaUrls?.length || 0) > 1 && (
-                              <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
-                                影片 {vIdx + 1}
-                              </div>
-                            )}
+                    {/* 圖片 — show if imageUrls exist, or legacy image contentType */}
+                    {(() => {
+                      const allImages = item.imageUrls && item.imageUrls.length > 0
+                        ? item.imageUrls
+                        : (item.contentType === 'image' && item.mediaUrl ? [item.mediaUrl] : []);
+                      if (allImages.length === 0) return null;
+                      return (
+                        <div className="mt-2 mb-2">
+                          <div className="flex items-center gap-1 mb-1.5">
+                            <ImageIcon size={12} className="text-purple-400" />
+                            <span className="text-[10px] font-bold text-purple-400">圖片說明</span>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {allImages.map((url, imgIdx) => (
+                              <div key={imgIdx} className="rounded-lg overflow-hidden aspect-square bg-black/5">
+                                <img src={url} alt={`${item.title} ${imgIdx + 1}`} className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
-                    {item.contentType === 'image' && item.mediaUrl && (
-                      <div className="mt-2 rounded-lg overflow-hidden relative aspect-video bg-black/5">
-                        <img src={item.mediaUrl} alt={item.title} className="w-full h-full object-contain" />
-                      </div>
-                    )}
+                    {/* 影片 — show if mediaUrls exist, or legacy video contentType */}
+                    {(() => {
+                      const allVideos = item.mediaUrls && item.mediaUrls.length > 0
+                        ? item.mediaUrls
+                        : (item.contentType === 'video' && item.mediaUrl ? [item.mediaUrl] : []);
+                      if (allVideos.length === 0) return null;
+                      return (
+                        <div className="mt-2 space-y-2">
+                          <div className="flex items-center gap-1">
+                            <Video size={12} className="text-red-400" />
+                            <span className="text-[10px] font-bold text-red-400">教學影片</span>
+                          </div>
+                          {allVideos.map((url, vIdx) => (
+                            <div key={vIdx} className="rounded-lg overflow-hidden relative aspect-video bg-black/5">
+                              <video src={url} controls className="w-full h-full object-contain" />
+                              {allVideos.length > 1 && (
+                                <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                  影片 {vIdx + 1}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

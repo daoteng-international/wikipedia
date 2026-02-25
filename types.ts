@@ -54,11 +54,12 @@ export interface Equipment {
   category: WikiCategory;
   iconName: string; // Used for Lucide icon matching
   description: string;
-  // New fields for Content Management
-  contentType: 'guide' | 'video' | 'image';
-  instructions?: string[]; // Optional, used if contentType is 'guide'
+  // Content fields — all optional, display whatever exists
+  contentType?: 'guide' | 'video' | 'image'; // Legacy, kept for backward compat
+  instructions?: string[]; // 操作步驟
   mediaUrl?: string; // Legacy single media (backward compat)
-  mediaUrls?: string[]; // Multiple videos/images
+  mediaUrls?: string[]; // Multiple videos
+  imageUrls?: string[]; // Multiple images
   uploadDate?: string;
 }
 
